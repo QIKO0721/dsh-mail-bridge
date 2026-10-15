@@ -81,7 +81,7 @@ Highlights
 
 Testing
 -------
-495 assertions across 13 suites, plus an integration suite that runs against a real DSH
+496 assertions across 13 suites, plus an integration suite that runs against a real DSH
 installation and skips cleanly when none is present. No mailbox and no DSH are required to
 run the test suite: it ships a mock DSH that reproduces success, permission denial, unknown
 session, timeout, and empty output, along with fake IMAP/SMTP layers. A separate static
@@ -120,7 +120,7 @@ What's in it
     fresh session, then says so in the reply
   · Loop protection via a marker header on replies
   · Backpressure cap so a mail backlog can't stall polling for hours
-  · 495 assertions across 13 suites; a mock DSH and fake IMAP/SMTP mean the suite runs with
+  · 496 assertions across 13 suites; a mock DSH and fake IMAP/SMTP mean the suite runs with
     no mailbox and no DSH installed
 
 Verified on Windows 11 with QQ Mail. Feedback from other platforms and providers is very

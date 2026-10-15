@@ -19,13 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-## 使用提醒（非法律文本）
-
-这个程序**允许一封邮件指挥一台电脑执行命令**。部署前请务必：
-
-1. 把 `allowFrom` 收紧到只有你自己的地址；
-2. 保管好邮箱授权码 —— 它等同于密码；
-3. 想清楚你给了它多大权限。权限越大，出事的后果越大。

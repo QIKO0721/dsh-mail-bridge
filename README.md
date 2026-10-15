@@ -364,6 +364,14 @@ They are written up in [docs/LESSONS.md](docs/LESSONS.md), including:
 
 [MIT](LICENSE). Provided as-is; you are responsible for what you let it do.
 
+> **Before you deploy this** — the program lets an email run commands on a
+> computer. So:
+>
+> 1. Tighten `allowFrom` to your own address only;
+> 2. Guard the mailbox authorization code like a password;
+> 3. Be deliberate about how much permission you grant it. The wider the
+>    permission, the worse a mistake can get.
+
 ---
 
 ## 中文说明

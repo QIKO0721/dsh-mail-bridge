@@ -15,6 +15,10 @@
  */
 
 const fs = require('fs');
+const { messages } = require('./i18n');
+
+// 回给用户的错误说明跟语言走（注意：本文件里的中英正则不能动，那是用来识别 DSH 输出的）
+const { t2 } = messages();
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -407,9 +411,11 @@ function runDshOnce(opts) {
     if (!opts.bin || !fs.existsSync(opts.bin)) {
       return Promise.resolve({
         ok: false,
-        text: '找不到 DSH 入口：' + (opts.bin || '(空)') +
-              '\n\n请在 config.json 里把 dshBin 填成 DSH 命令行入口的完整路径' +
-              '（一般叫 lib/bin.js），或者先运行  node bin/cli.js doctor  看自检结果。',
+        text: t2('找不到 DSH 入口：', 'DSH entry point not found: ') + (opts.bin || t2('(空)', '(empty)')) +
+              t2('\n\n请在 config.json 里把 dshBin 填成 DSH 命令行入口的完整路径',
+         '\n\nSet dshBin in config.json to the full path of the DSH command-line entry') +
+              t2('（一般叫 lib/bin.js），或者先运行  node bin/cli.js doctor  看自检结果。',
+         ' (usually lib/bin.js), or run  node bin/cli.js doctor  to see what it finds.'),
         sessionId: null,
         permissionDenied: false,
         unknownSession: false,
@@ -457,7 +463,7 @@ function runDshOnce(opts) {
       });
     } catch (e) {
       return resolve({
-        ok: false, text: '无法启动 DSH：' + e.message,
+        ok: false, text: t2('无法启动 DSH：', 'could not start DSH: ') + e.message,
         sessionId: null, permissionDenied: false, unknownSession: false, timedOut: false
       });
     }
@@ -468,7 +474,8 @@ function runDshOnce(opts) {
       try { child.kill(); } catch (e) { /* ignore */ }
       resolve({
         ok: false,
-        text: '任务超时（' + Math.round(timeoutMs / 1000) + ' 秒），已中止子进程',
+        text: t2('任务超时（' + Math.round(timeoutMs / 1000) + ' 秒），已中止子进程',
+                'task timed out after ' + Math.round(timeoutMs / 1000) + 's; the subprocess was killed'),
         sessionId: parser.state.sessionId,
         permissionDenied: parser.state.permissionDenied,
         unknownSession: false,
@@ -502,8 +509,9 @@ function runDshOnce(opts) {
       clearTimeout(timer);
       resolve({
         ok: false,
-        text: '启动 DSH 失败：' + e.message +
-              '\n\n提示：确认 dshBin 指向的是 DSH 的命令行入口（lib/bin.js），或者把 dsh 装好。',
+        text: t2('启动 DSH 失败：', 'failed to start DSH: ') + e.message +
+              t2('\n\n提示：确认 dshBin 指向的是 DSH 的命令行入口（lib/bin.js），或者把 dsh 装好。',
+         '\n\nCheck that dshBin points at the DSH command-line entry (lib/bin.js), or install dsh.'),
         sessionId: parser.state.sessionId,
         permissionDenied: false,
         unknownSession: false,
@@ -530,7 +538,7 @@ function runDshOnce(opts) {
       if (text) return resolve(Object.assign({ ok: true, text }, base));
       return resolve(Object.assign({
         ok: false,
-        text: 'DSH 退出码 ' + code + (stderr ? '\n\n' + stderr.slice(-1500) : '（没有任何输出）')
+        text: t2('DSH 退出码 ', 'DSH exited with code ') + code + (stderr ? '\n\n' + stderr.slice(-1500) : t2('（没有任何输出）', ' (no output at all)'))
       }, base));
     });
   });

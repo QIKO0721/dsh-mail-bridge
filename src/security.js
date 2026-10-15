@@ -8,6 +8,11 @@
 
 const LOOP_HEADER = 'x-mail-bridge-bot';
 
+const { messages } = require('./i18n');
+
+// 判定理由会写进日志，所以跟语言走
+const { t2 } = messages();
+
 /** 从 mailparser 的 headers 对象里安全地取一个头，取不到返回 '' */
 function getHeader(headers, name) {
   try {
@@ -90,12 +95,12 @@ function checkAuthenticity(opts) {
   if (secret) {
     const body = String(opts.text || '') + '\n' + String(opts.html || '');
     if (!body.includes(secret)) {
-      return { ok: false, reason: '正文里没有找到暗号' };
+      return { ok: false, reason: t2('正文里没有找到暗号', 'the passphrase was not found in the body') };
     }
   }
 
   if (opts.strictAuthCheck === false) {
-    return { ok: true, note: '已关闭 SPF/DKIM 校验（strictAuthCheck=false）' };
+    return { ok: true, note: t2('已关闭 SPF/DKIM 校验（strictAuthCheck=false）', 'SPF/DKIM check disabled (strictAuthCheck=false)') };
   }
 
   const ar = getHeader(headers, 'authentication-results');
@@ -111,7 +116,7 @@ function checkAuthenticity(opts) {
   //
   //    想更保险：在 config.json 里设一个 secret —— 那样即使头部规律失效，
   //    没有暗号的信也进不来。README 里也写了这一点。
-  if (!ar.trim()) return { ok: true, note: '服务商内部投递（未做 SPF/DKIM 校验）' };
+  if (!ar.trim()) return { ok: true, note: t2('服务商内部投递（未做 SPF/DKIM 校验）', 'delivered internally by the provider (no SPF/DKIM result)') };
 
   const spfPass = /spf\s*=\s*pass/i.test(ar);
   const spfBad = /spf\s*=\s*(fail|softfail|permerror|temperror|none)/i.test(ar);
@@ -120,14 +125,14 @@ function checkAuthenticity(opts) {
   if (spfBad || !spfPass) {
     return {
       ok: false,
-      reason: 'SPF 未通过（发件人地址可能是伪造的）',
+      reason: t2('SPF 未通过（发件人地址可能是伪造的）', 'SPF failed (the sender address may be forged)'),
       detail: ar.slice(0, 200)
     };
   }
   if (dkimBad) {
-    return { ok: false, reason: 'DKIM 校验失败', detail: ar.slice(0, 200) };
+    return { ok: false, reason: t2('DKIM 校验失败', 'DKIM verification failed'), detail: ar.slice(0, 200) };
   }
-  return { ok: true, note: '外部来信，SPF 通过' };
+  return { ok: true, note: t2('外部来信，SPF 通过', 'external mail, SPF passed') };
 }
 
 module.exports = {

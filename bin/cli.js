@@ -16,6 +16,10 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const PKG = require(path.join(ROOT, 'package.json'));
 
+// 语言要在最前面定：--lang= 是命令行参数，后面的输出全靠它
+const { messages } = require(path.join(ROOT, 'src', 'i18n'));
+const { lang, t, t2 } = messages(process.argv);
+
 const { loadConfig, validateConfig, configPath, maskEmail, defaultConfig } = require(path.join(ROOT, 'src', 'config'));
 const { createLogger } = require(path.join(ROOT, 'src', 'logger'));
 const { findDshBin, guessPermissionFiles, createSessionStore } = require(path.join(ROOT, 'src', 'dsh'));
@@ -36,7 +40,7 @@ function title(s) {
 
 function cmdInit() {
   const file = configPath(ROOT);
-  title('邮箱助手 · 配置');
+  title(t('init.title'));
 
   if (fs.existsSync(file)) {
     const { config, error, hint } = loadConfig(ROOT);
@@ -46,14 +50,14 @@ function cmdInit() {
       process.exitCode = 1;
       return;
     }
-    line('  配置文件已存在：' + file);
+    line('  ' + t('init.exists') + file);
     const problems = validateConfig(config);
     if (!problems.length) {
-      line(OK + '检查通过，可以直接 start');
+      line(OK + t('init.ok'));
       return;
     }
     line('');
-    line('  还有 ' + problems.length + ' 项要填：');
+    line(t('init.remaining', { n: problems.length }));
     for (const p of problems) {
       line('    · ' + p.field + '：' + p.msg);
       line('      → ' + p.fix);
@@ -62,28 +66,28 @@ function cmdInit() {
   }
 
   fs.writeFileSync(file, JSON.stringify(defaultConfig(), null, 2), 'utf8');
-  line(OK + '已生成配置文件：' + file);
+  line(OK + t('init.created') + file);
   line('');
-  line('  接下来：');
-  line('    1. 用编辑器打开它');
-  line('    2. 填 email（你的邮箱地址）');
-  line('    3. 填 authCode（邮箱授权码 —— 不是登录密码！）');
-  line('    4. 填 allowFrom（允许发命令的地址，收紧到只有你自己）');
+  line('  ' + t('init.next'));
+  line('    ' + t('init.step1'));
+  line('    ' + t('init.step2'));
+  line('    ' + t('init.step3'));
+  line('    ' + t('init.step4'));
   line('');
-  line('  授权码怎么拿（以 QQ 邮箱为例）：');
-  line('    设置 → 账户 → 开启「IMAP/SMTP 服务」→ 按提示发短信 → 拿到 16 位授权码');
+  line('  ' + t('init.authcodeHow'));
+  line('    ' + t('init.authcodePath'));
   line('');
-  line('  另外：这个项目本身不含 AI，干活的是 DSH。');
-  line('  没装过的话先装一个（装完 doctor 会自动认出来）：');
+  line('  ' + t('app.noAi'));
+  line('  ' + t('init.installDsh'));
   line('    npm install -g @deepseek-ai/dsh');
   line('');
-  line('  填好后运行：  node bin/cli.js doctor');
+  line('  ' + t('init.then'));
 }
 
 // ==================== doctor ====================
 
 function cmdDoctor() {
-  title('邮箱助手 · 环境自检');
+  title(t('doc.title'));
   let bad = 0;
 
   // 1) Node 版本
@@ -91,7 +95,7 @@ function cmdDoctor() {
   if (major >= 18) {
     line(OK + 'Node ' + process.version);
   } else {
-    line(BAD + 'Node ' + process.version + ' 太老（需要 >= 18）');
+    line(BAD + 'Node ' + process.version + t('doc.nodeOld'));
     bad++;
   }
 
@@ -100,9 +104,9 @@ function cmdDoctor() {
   for (const d of deps) {
     try {
       require.resolve(d, { paths: [ROOT] });
-      line(OK + '依赖 ' + d);
+      line(OK + t('doc.dep') + d);
     } catch (e) {
-      line(BAD + '依赖 ' + d + ' 没装 —— 运行 npm install');
+      line(BAD + t('doc.dep') + d + t('doc.depMiss'));
       bad++;
     }
   }
@@ -110,7 +114,7 @@ function cmdDoctor() {
   // 3) 配置文件
   const { config, error, hint, missing } = loadConfig(ROOT);
   if (missing) {
-    line(BAD + '还没有 config.json —— 先运行: node bin/cli.js init');
+    line(BAD + t('doc.noConfig'));
     bad++;
   } else if (error) {
     line(BAD + error);
@@ -119,19 +123,19 @@ function cmdDoctor() {
   } else {
     const problems = validateConfig(config);
     if (problems.length) {
-      line(BAD + '配置有 ' + problems.length + ' 项问题：');
+      line(BAD + t('doc.cfgProblems', { n: problems.length }));
       for (const p of problems) {
         line('      · ' + p.field + '：' + p.msg);
         line('        → ' + p.fix);
       }
       bad++;
     } else {
-      line(OK + '配置有效');
-      line('      邮箱      ' + maskEmail(config.email));
-      line('      白名单    ' + config.allowFrom.map(maskEmail).join(', '));
-      line('      轮询间隔  ' + config.pollSeconds + ' 秒');
-      line('      会话      ' + (config.sessionId || '(每封独立)'));
-      line('      暗号      ' + (config.secret ? '已启用' : '未启用'));
+      line(OK + t('doc.cfgValid'));
+      line('      ' + t('doc.lblMailbox') + maskEmail(config.email));
+      line('      ' + t('doc.lblAllow') + config.allowFrom.map(maskEmail).join(', '));
+      line('      ' + t('doc.lblPoll') + config.pollSeconds + t('doc.lblSeconds'));
+      line('      ' + t('doc.lblSession') + (config.sessionId || t('doc.perMail')));
+      line('      ' + t('doc.lblSecret') + (config.secret ? t('doc.on') : t('doc.off')));
     }
   }
 
@@ -139,15 +143,15 @@ function cmdDoctor() {
   if (config && !missing && !error) {
     const bin = findDshBin({ dshBin: config.dshBin });
     if (bin) {
-      line(OK + 'DSH 入口 ' + bin);
+      line(OK + t('doc.dshEntry') + bin);
     } else {
-      line(BAD + '找不到 DSH —— 这个项目本身不含 AI，它只是把任务转交给 DSH。');
-      line('      还没装的话，先装：');
+      line(BAD + t('doc.dshMissing'));
+      line(t('doc.dshInstall'));
       line('        npm install -g @deepseek-ai/dsh');
-      line('      装完再跑一次 doctor，一般就能自动认出来了。');
-      line('      如果装完还是找不到，就把入口路径手填进 config.json 的 dshBin，');
-      line('      它指向包里的 lib/bin.js，例如：');
-      line('        C:\\Users\\你\\AppData\\Roaming\\npm\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js');
+      line(t('doc.dshRetry'));
+      line(t('doc.dshManual'));
+      line(t('doc.dshPoints'));
+      line('        C:\\Users\\<you>\\AppData\\Roaming\\npm\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js');
       bad++;
     }
 
@@ -155,11 +159,11 @@ function cmdDoctor() {
     const pf = guessPermissionFiles({ dshHome: config.dshHome, dshProfile: config.dshProfile });
     const found = pf.filter(f => { try { return fs.existsSync(f); } catch (e) { return false; } });
     if (found.length) {
-      line(OK + '权限配置 ' + found.length + ' 个文件（指纹监控生效）');
+      line(OK + t('doc.permFiles', { n: found.length }));
       for (const f of found) line('      ' + f);
     } else {
-      line(WARN + '没找到权限配置文件 —— 权限指纹机制会静默失效（不影响使用）');
-      line('      找过这些位置：');
+      line(WARN + t('doc.permNone'));
+      line('      ' + t('doc.permLooked'));
       for (const f of pf) line('      ' + f);
     }
   }
@@ -169,18 +173,18 @@ function cmdDoctor() {
     const probe = path.join(ROOT, '.write-probe');
     fs.writeFileSync(probe, 'ok', 'utf8');
     fs.unlinkSync(probe);
-    line(OK + '工作目录可写');
+    line(OK + t('doc.writable'));
   } catch (e) {
-    line(BAD + '工作目录不可写：' + e.message);
+    line(BAD + t('doc.notWritable') + e.message);
     bad++;
   }
 
   line('');
   if (bad) {
-    line('  自检发现 ' + bad + ' 个问题，先解决再 start。');
+    line(t('doc.badCount', { n: bad }));
     process.exitCode = 1;
   } else {
-    line('  自检通过，可以 start 了：  node bin/cli.js start');
+    line(t('doc.allGood'));
   }
 }
 
@@ -189,8 +193,8 @@ function cmdDoctor() {
 async function cmdStart() {
   const { config, error, hint, missing } = loadConfig(ROOT);
   if (missing) {
-    title('邮箱助手');
-    line(BAD + '还没有 config.json —— 先运行: node bin/cli.js init');
+    title(t('app.name'));
+    line(BAD + t('doc.noConfig'));
     process.exitCode = 1;
     return;
   }
@@ -202,14 +206,14 @@ async function cmdStart() {
   }
   const problems = validateConfig(config);
   if (problems.length) {
-    title('邮箱助手');
-    line(BAD + '配置还没填好：');
+    title(t('app.name'));
+    line(BAD + t('start.notReady'));
     for (const p of problems) {
       line('    · ' + p.field + '：' + p.msg);
       line('      → ' + p.fix);
     }
     line('');
-    line('  （运行 node bin/cli.js doctor 看完整自检）');
+    line(t('start.seeDoctor'));
     process.exitCode = 1;
     return;
   }
@@ -221,7 +225,7 @@ async function cmdStart() {
     ({ simpleParser } = require('mailparser'));
     nodemailer = require('nodemailer');
   } catch (e) {
-    line(BAD + '依赖没装全，先运行: npm install');
+    line(BAD + t('start.depMissing'));
     line('    ' + e.message);
     process.exitCode = 1;
     return;
@@ -238,39 +242,39 @@ async function cmdStart() {
       deps: { ImapFlow, simpleParser, nodemailer }
     });
   } catch (e) {
-    line(BAD + '初始化失败：' + (e && e.message ? e.message : e));
+    line(BAD + t('start.initFail') + (e && e.message ? e.message : e));
     process.exitCode = 1;
     return;
   }
 
   const { daemon, log, bin, transport } = app;
 
-  title('邮箱助手');
-  line('  邮箱      ' + maskEmail(config.email));
-  line('  白名单    ' + config.allowFrom.map(maskEmail).join(', '));
-  line('  轮询间隔  ' + config.pollSeconds + ' 秒');
-  line('  会话      ' + (config.sessionId || '(每封独立)'));
-  line('  DSH       ' + (bin || '【找不到！请在 config.json 里填 dshBin】'));
-  line('  日志      ' + path.join(ROOT, 'mail-bridge.log'));
+  title(t('app.name'));
+  line(t('start.lblMailbox') + maskEmail(config.email));
+  line(t('start.lblAllow') + config.allowFrom.map(maskEmail).join(', '));
+  line(t('start.lblPoll') + config.pollSeconds + t('start.lblSeconds'));
+  line(t('start.lblSession') + (config.sessionId || t('doc.perMail')));
+  line(t('start.lblDsh') + (bin || t('start.dshPlaceholder')));
+  line(t('start.lblLog') + path.join(ROOT, 'mail-bridge.log'));
   line('');
   if (!bin) {
-    line(BAD + '没有 DSH 就没法干活。填好 dshBin 再启动。');
+    line(BAD + t('start.noDsh'));
     process.exitCode = 1;
     return;
   }
-  line('  按 Ctrl+C 停止。这个窗口别关。');
+  line(t('start.ctrlC'));
   line('');
 
   process.on('SIGINT', () => {
-    log('收到 Ctrl+C，准备退出');
+    log(t('start.logSigint'));
     daemon.stop();
   });
   // 兜底：不让任何漏网的异常把进程整个干掉
   process.on('unhandledRejection', (e) => {
-    log('未处理的 Promise 异常（已忽略，继续运行）：' + (e && e.message ? e.message : e));
+    log(t('start.logRejection') + (e && e.message ? e.message : e));
   });
   process.on('uncaughtException', (e) => {
-    log('未捕获的异常（已忽略，继续运行）：' + (e && e.stack ? e.stack : e));
+    log(t('start.logException') + (e && e.stack ? e.stack : e));
   });
 
   await daemon.start({ bin, root: ROOT, transport });
@@ -279,23 +283,26 @@ async function cmdStart() {
 // ==================== help ====================
 
 function cmdHelp() {
-  title('邮箱助手 v' + PKG.version + ' · 用法');
-  line('  用一封邮件，遥控一台没有公网 IP 的电脑上的 DSH 干活。');
+  title(t('help.title', { v: PKG.version }));
+  line('  ' + t('app.tagline'));
   line('');
-  line('  命令：');
-  line('    node bin/cli.js init      生成配置文件');
-  line('    node bin/cli.js doctor    环境自检（不连邮箱、不跑任务）');
-  line('    node bin/cli.js start     启动轮询');
-  line('    node bin/cli.js help      这条说明');
+  line(t('help.commands'));
+  line('    node bin/cli.js init      ' + t('help.init'));
+  line('    node bin/cli.js doctor    ' + t('help.doctor'));
+  line('    node bin/cli.js start     ' + t('help.start'));
+  line('    node bin/cli.js help      ' + t('help.help'));
   line('');
-  line('  也可以：npm run init / npm run doctor / npm start / npm test');
+  line(t('help.npmAlso'));
   line('');
-  line('  文档见 README.md');
+  line(t('help.docs'));
 }
 
 // ==================== 分发 ====================
 
-const cmd = (process.argv[2] || 'help').toLowerCase();
+// 先滤掉 --lang=xxx 这类全局选项，再取命令。
+// 不滤的话 `node bin/cli.js --lang=en doctor` 会把 --lang=en 当成命令名。
+const argvRest = process.argv.slice(2).filter(a => !a.startsWith('--lang='));
+const cmd = (argvRest[0] || 'help').toLowerCase();
 
 (async () => {
   try {
@@ -305,13 +312,13 @@ const cmd = (process.argv[2] || 'help').toLowerCase();
     else if (cmd === 'help' || cmd === '--help' || cmd === '-h') cmdHelp();
     else if (cmd === '--version' || cmd === '-v') line(PKG.version);
     else {
-      line('未知命令：' + cmd);
+      line(t('err.unknownCmd') + cmd);
       cmdHelp();
       process.exitCode = 1;
     }
   } catch (e) {
     line('');
-    line('出错了：' + (e && e.stack ? e.stack : e));
+    line(t('err.failed') + (e && e.stack ? e.stack : e));
     process.exitCode = 1;
   }
 })();

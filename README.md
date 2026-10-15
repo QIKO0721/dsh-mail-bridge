@@ -111,6 +111,15 @@ npm run doctor     # environment check; does NOT connect to mail or run tasks
 npm start          # start polling
 ```
 
+**Language.** The CLI, the reply emails and the log lines all follow your system
+locale (Chinese locale → Chinese, anything else → English). Override it when you
+want something else:
+
+```bash
+node bin/cli.js --lang=en doctor     # force English for this run
+export MAIL_BRIDGE_LANG=zh           # or set it for the whole shell
+```
+
 `doctor` is the step worth reading carefully — it checks Node, dependencies, your config,
 whether it can find DSH, and whether your permission config is monitorable, and it tells you
 how to fix each thing it complains about.

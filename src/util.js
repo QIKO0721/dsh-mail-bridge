@@ -5,6 +5,11 @@
  * 这里只放跟"业务"无关的纯函数，方便单测。
  */
 
+const { messages } = require('./i18n');
+
+// humanSeconds 的输出要给用户看，所以要跟着语言走
+const { lang } = messages();
+
 /**
  * 统一换行为 \n，并去掉行尾空白。
  * 邮件正文里 \r\n / \r / \n 三种都可能出现，不统一后面所有正则都会翻车。
@@ -41,15 +46,24 @@ function parseJsonLoose(text) {
   return JSON.parse(String(text).replace(/^\uFEFF/, ''));
 }
 
-/** 秒数格式化成人类可读，如 95 → "1分35秒" */
+/** 秒数格式化成人类可读 */
 function humanSeconds(sec) {
   const s = Math.max(0, Math.round(sec));
-  if (s < 60) return s + ' 秒';
+  if (lang === 'zh') {
+    if (s < 60) return s + ' 秒';
+    const m = Math.floor(s / 60);
+    const rest = s % 60;
+    if (m < 60) return m + ' 分' + (rest ? rest + ' 秒' : '');
+    const h = Math.floor(m / 60);
+    return h + ' 时' + (m % 60) + ' 分';
+  }
+  // 英文用 "1m 35s" 这种紧凑写法
+  if (s < 60) return s + 's';
   const m = Math.floor(s / 60);
   const rest = s % 60;
-  if (m < 60) return m + ' 分' + (rest ? rest + ' 秒' : '');
+  if (m < 60) return m + 'm' + (rest ? ' ' + rest + 's' : '');
   const h = Math.floor(m / 60);
-  return h + ' 时' + (m % 60) + ' 分';
+  return h + 'h ' + (m % 60) + 'm';
 }
 
 module.exports = { normalizeNewlines, tidy, deepEqual, parseJsonLoose, humanSeconds };

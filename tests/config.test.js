@@ -75,7 +75,11 @@ try {
   fs.writeFileSync(path.join(dir, 'config.json'), '{ 这不是 json', 'utf8');
   const third = cfgMod.loadConfig(dir);
   ok('坏 JSON 会报错而不是崩掉', !!third.error);
-  ok('坏 JSON 会给修复提示', !!third.hint && third.hint.includes('重新运行'));
+  // 断言"有能力给出可操作的提示"，而不是"提示里恰好有某个词" ——
+  // 后者会因为文案换语言或换措辞而误报。下面这条就踩过：
+  // 原来断言提示里含「重新运行」，而那半句现在只出现在英文分支里。
+  ok('坏 JSON 会给修复提示', !!third.hint && third.hint.length > 20);
+  ok('修复提示里带了配置文件路径', !!third.hint && third.hint.includes('config.json'));
 
   // BOM
   fs.writeFileSync(path.join(dir, 'config.json'),

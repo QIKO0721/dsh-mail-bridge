@@ -12,6 +12,10 @@
 const fs = require('fs');
 const path = require('path');
 const { parseJsonLoose } = require('./util');
+const { messages } = require('./i18n');
+
+// 生成的 config.json 注释、以及校验提示都跟语言走
+const { lang, t2 } = messages();
 
 /** 判断配置里的邮箱是不是还是占位符 */
 const PLACEHOLDER_EMAIL = 'you@example.com';
@@ -19,10 +23,16 @@ const PLACEHOLDER_CODE = 'PASTE-YOUR-16-CHAR-AUTH-CODE-HERE';
 
 function defaultConfig() {
   return {
-    _readme: [
+    _readme: lang === 'zh' ? [
       '这个文件含邮箱授权码，等同密码，绝对不要提交到 git 或发给别人。',
       '授权码不是邮箱登录密码 —— 到邮箱服务商的设置里单独生成一个。',
       'QQ 邮箱：设置 → 账户 → 开启 IMAP/SMTP 服务 → 拿到 16 位授权码。'
+    ] : [
+      'This file holds your mailbox authorization code. Treat it like a password:',
+      'never commit it to git and never send it to anyone.',
+      'The authorization code is NOT your login password - generate one separately',
+      'in your mail provider settings.',
+      'QQ Mail: Settings -> Account -> enable IMAP/SMTP -> collect the 16-char code.'
     ],
 
     // ---- 必填 ----
@@ -82,9 +92,11 @@ function loadConfig(root) {
   } catch (e) {
     return {
       file,
-      error: '配置文件不是合法 JSON：' + e.message,
-      hint: '用编辑器打开 ' + file + ' 检查一下 —— 常见原因是多了一个逗号、少了引号，' +
-            '或者保存成了带 BOM 的编码。也可以删掉它重新运行，会重新生成一份。'
+      error: t2('配置文件不是合法 JSON：', 'config file is not valid JSON: ') + e.message,
+      hint: t2('用编辑器打开 ' + file + ' 检查一下 —— 常见原因是多了一个逗号、少了引号，',
+            '或者保存成了带 BOM 的编码。也可以删掉它重新运行，会重新生成一份。',
+            'open ' + file + ' in an editor - usually it is a stray comma, a missing quote,',
+            'or the file was saved with a BOM. Deleting it and running init again also works.')
     };
   }
 
@@ -112,8 +124,8 @@ function validateConfig(cfg) {
   if (!cfg.email || cfg.email === PLACEHOLDER_EMAIL || !/^[^@\s]+@[^@\s]+$/.test(cfg.email)) {
     problems.push({
       field: 'email',
-      msg: 'email 没填或格式不对',
-      fix: '填上你自己的邮箱地址，例如 someone@qq.com'
+      msg: t2('email 没填或格式不对', 'email is empty or malformed'),
+      fix: t2('填上你自己的邮箱地址，例如 someone@qq.com', 'put your own mailbox address here, e.g. someone@example.com')
     });
   }
 
@@ -124,38 +136,38 @@ function validateConfig(cfg) {
   if (!code || code === PLACEHOLDER_CODE) {
     problems.push({
       field: 'authCode',
-      msg: 'authCode 没填（或只有空白）',
-      fix: '到邮箱设置里开启 IMAP/SMTP 服务，生成 16 位授权码（不是登录密码），粘贴到这里'
+      msg: t2('authCode 没填（或只有空白）', 'authCode is empty (or whitespace only)'),
+      fix: t2('到邮箱设置里开启 IMAP/SMTP 服务，生成 16 位授权码（不是登录密码），粘贴到这里', 'enable IMAP/SMTP in your mail settings and paste the 16-char code (not your password)')
     });
   }
 
   if (!Array.isArray(cfg.allowFrom) || cfg.allowFrom.length === 0) {
     problems.push({
       field: 'allowFrom',
-      msg: 'allowFrom 是空的',
-      fix: '至少填一个允许发命令的邮箱地址 —— 留空等于谁都不能用'
+      msg: t2('allowFrom 是空的', 'allowFrom is empty'),
+      fix: t2('至少填一个允许发命令的邮箱地址 —— 留空等于谁都不能用', 'list at least one address allowed to send commands - empty means nobody can')
     });
   } else if (cfg.allowFrom.some(a => !String(a || '').trim() || a === PLACEHOLDER_EMAIL)) {
     problems.push({
       field: 'allowFrom',
-      msg: 'allowFrom 里有空串或占位地址',
-      fix: '换成你自己的邮箱地址；这个列表决定谁能遥控这台电脑，务必收紧'
+      msg: t2('allowFrom 里有空串或占位地址', 'allowFrom contains an empty string or the placeholder address'),
+      fix: t2('换成你自己的邮箱地址；这个列表决定谁能遥控这台电脑，务必收紧', 'replace it with your own address; this list decides who can command this machine - keep it tight')
     });
   }
 
   if (!Number.isFinite(cfg.pollSeconds) || cfg.pollSeconds < 5) {
     problems.push({
       field: 'pollSeconds',
-      msg: 'pollSeconds 太小或不是数字',
-      fix: '建议 10~60 秒。太频繁会被邮箱服务商限流'
+      msg: t2('pollSeconds 太小或不是数字', 'pollSeconds is too small or not a number'),
+      fix: t2('建议 10~60 秒。太频繁会被邮箱服务商限流', '10-60 seconds is a good range; polling too often gets you rate-limited')
     });
   }
 
   if (!Number.isFinite(cfg.taskTimeoutSeconds) || cfg.taskTimeoutSeconds < 10) {
     problems.push({
       field: 'taskTimeoutSeconds',
-      msg: 'taskTimeoutSeconds 太小或不是数字',
-      fix: '建议 300~900 秒'
+      msg: t2('taskTimeoutSeconds 太小或不是数字', 'taskTimeoutSeconds is too small or not a number'),
+      fix: t2('建议 300~900 秒', '300-900 seconds is a good range')
     });
   }
 
@@ -166,16 +178,16 @@ function validateConfig(cfg) {
       typeof cfg.secret !== 'string') {
     problems.push({
       field: 'secret',
-      msg: 'secret 必须是字符串（现在是 ' + typeof cfg.secret + '）',
-      fix: '用引号包起来，例如 "secret": "我的暗号"'
+      msg: t2('secret 必须是字符串（现在是 ', 'secret must be a string (currently ') + typeof cfg.secret + t2('）', ')'),
+      fix: t2('用引号包起来，例如 "secret": "我的暗号"', 'wrap it in quotes, e.g. "secret": "my-passphrase"')
     });
   }
 
   if (typeof cfg.secret === 'string' && cfg.secret && cfg.secret.length < 4) {
     problems.push({
       field: 'secret',
-      msg: 'secret 太短',
-      fix: '要么留空（关闭暗号），要么设一个长一点的'
+      msg: t2('secret 太短', 'secret is too short'),
+      fix: t2('要么留空（关闭暗号），要么设一个长一点的', 'either leave it empty (disables the passphrase) or make it longer')
     });
   }
 

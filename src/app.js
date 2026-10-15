@@ -13,6 +13,9 @@ const fs = require('fs');
 const path = require('path');
 
 const { configPath } = require('./config');
+const { messages } = require('./i18n');
+
+const { t2 } = messages();
 const { createLogger } = require('./logger');
 const { createSessionStore, guessPermissionFiles, findDshBin } = require('./dsh');
 const { createTaskRunner } = require('./task');
@@ -57,7 +60,7 @@ function buildApp(opts) {
       raw.sessionId = id;
       fs.writeFileSync(file, JSON.stringify(raw, null, 2), 'utf8');
     } catch (e) {
-      log('保存会话 ID 失败：' + (e && e.message ? e.message : e));
+      log(t2('保存会话 ID 失败：', 'failed to save the session id: ') + (e && e.message ? e.message : e));
     }
   }
 

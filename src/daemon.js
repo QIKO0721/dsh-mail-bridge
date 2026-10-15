@@ -19,10 +19,17 @@ const { cleanBody, matchNewSession, matchHelp } = require('./email');
 const mail = require('./mail');
 const { buildReply } = require('./task');
 const { maskEmail } = require('./config');
+const { messages } = require('./i18n');
+
+// 这个模块里所有面向人的文案（回信正文 + 运行日志）都走 t2(中文, 英文)。
+// 语言按 --lang= / MAIL_BRIDGE_LANG / 系统语言 依次判定，见 src/i18n.js。
+const { lang, t2 } = messages();
 
 /** 帮助回信的内容 */
 function helpText(cfg, sessionId) {
-  return [
+  // 中英各一份完整文本。按单行翻译反而会把段落结构弄乱（英文句子更长、
+  // 断行位置不同），整块给两份最清楚。
+  const zh = [
     '邮箱助手 · 用法',
     '',
     '直接发邮件，正文就是你说的话，处理完会回信。',
@@ -41,7 +48,32 @@ function helpText(cfg, sessionId) {
     '',
     '只处理来自这些地址的邮件：',
     '  ' + (cfg.allowFrom || []).join('\n  ')
-  ].join('\n');
+  ];
+
+  const en = [
+    'Mail Bridge · usage',
+    '',
+    'Just send an email. The body is your message; the answer comes back by email.',
+    '',
+    'Special commands (send one of these as the whole body):',
+    '  help                               show this text',
+    '  new / reset                        clear the memory and start over',
+    '',
+    'About starting a new session:',
+    '  DSH permission presets only apply to NEW sessions.',
+    '  If the AI cannot touch files outside its workspace, the current session',
+    '  still holds the old permissions. Send an email whose body is just "new",',
+    '  and the NEXT one gets the new permissions.',
+    '  Note: the reset takes effect on the next email - this one is still',
+    '  answered from the old memory.',
+    '',
+    'Current session: ' + (sessionId || '(none yet; the next email creates one)'),
+    '',
+    'Only mail from these addresses is processed:',
+    '  ' + (cfg.allowFrom || []).join('\n  ')
+  ];
+
+  return (lang === 'zh' ? zh : en).join('\n');
 }
 
 /**
@@ -70,12 +102,12 @@ function createDaemon(deps) {
 
     // 2) 白名单
     if (!senderAllowed(job.fromList, cfg.allowFrom)) {
-      log('跳过（不在白名单）：' + (job.fromList.join(',') || '(无发件人)'));
+      log(t2('跳过（不在白名单）：', 'skip (not in allowFrom): ') + (job.fromList.join(',') || t2('(无发件人)', '(no sender)')));
       return { action: 'skip-not-allowed' };
     }
 
     if (job.parseError) {
-      log('跳过（' + job.parseError + '）：UID ' + job.uid);
+      log(t2('跳过（', 'skip (') + job.parseError + t2('）：UID ', '): UID ') + job.uid);
       return { action: 'skip-parse-error' };
     }
 
@@ -89,7 +121,7 @@ function createDaemon(deps) {
       ownAddress: cfg.email, text: rawText
     });
     if (loop) {
-      log('跳过（认出是自己发出的回信，防自环 · ' + loop + '）');
+      log(t2('跳过（认出是自己发出的回信，防自环 · ', 'skip (recognized as our own reply, loop guard · ') + loop + t2('）', ')'));
       return { action: 'skip-own-reply' };
     }
 
@@ -100,8 +132,8 @@ function createDaemon(deps) {
       strictAuthCheck: cfg.strictAuthCheck
     });
     if (!auth.ok) {
-      log('!! 拦截可疑邮件（UID ' + job.uid + '）：' + auth.reason +
-          '  声称发件人=' + job.fromList.join(',') +
+      log(t2('!! 拦截可疑邮件（UID ', '!! blocked suspicious mail (UID ') + job.uid + t2('）：', '): ') + auth.reason +
+          t2('  声称发件人=', '  claimed from=') + job.fromList.join(',') +
           (auth.detail ? '  [' + auth.detail + ']' : ''));
       return { action: 'blocked-forgery' };
     }
@@ -111,7 +143,7 @@ function createDaemon(deps) {
     const bodyOpts = { from, stripSignatures: cfg.stripSignatures };
     const task = cleanBody(rawText, rawHtml, bodyOpts);
     if (!task) {
-      log('跳过（正文是空的，或只剩引用）');
+      log(t2('跳过（正文是空的，或只剩引用）', 'skip (body is empty, or nothing but quotes)'));
       return { action: 'skip-empty' };
     }
 
@@ -122,12 +154,17 @@ function createDaemon(deps) {
     if (resetHit) {
       saveSessionId('');
       cfg.sessionId = '';
-      log('已清空会话 ID（触发词「' + resetHit + '」），下一篇邮件会开新会话');
+      log(t2('已清空会话 ID（触发词「', 'cleared the session id (trigger "') + resetHit + t2('」），下一篇邮件会开新会话', '"); the next email starts a new session'));
       await mail.sendReply(ctx.transport, cfg, {
         to: from, subject,
-        body: '已清空记忆（触发了「' + resetHit + '」）。\n\n' +
-              '注意：是【下一篇】邮件才生效 —— 下一篇会当全新对话开始，' +
-              '记得把它当成第一句话来说。'
+        body: t2(
+          '已清空记忆（触发了「' + resetHit + '」）。\n\n' +
+          '注意：是【下一篇】邮件才生效 —— 下一篇会当全新对话开始，' +
+          '记得把它当成第一句话来说。',
+          'Memory cleared (triggered by "' + resetHit + '").\n\n' +
+          'Note: this takes effect on the NEXT email - that one starts a brand new\n' +
+          'conversation, so write it as if it were your first message.'
+        )
       });
       return { action: 'new-session', trigger: resetHit };
     }
@@ -144,12 +181,13 @@ function createDaemon(deps) {
     let limited = task;
     const maxTask = cfg.maxTaskChars || 8000;
     if (limited.length > maxTask) {
-      log('任务正文过长（' + limited.length + ' 字），截断到 ' + maxTask);
-      limited = '（提醒：原邮件正文过长，只截取了开头 ' + maxTask + ' 字）\n\n' +
+      log(t2('任务正文过长（', 'task body too long (') + limited.length + t2(' 字），截断到 ', ' chars), truncated to ') + maxTask);
+      limited = t2('（提醒：原邮件正文过长，只截取了开头 ' + maxTask + ' 字）\n\n',
+                   '(note: the original email was too long; only the first ' + maxTask + ' characters are used)\n\n') +
                 limited.slice(0, maxTask);
     }
 
-    log('收到任务：' + limited.slice(0, 80).replace(/\n/g, ' ') +
+    log(t2('收到任务：', 'task received: ') + limited.slice(0, 80).replace(/\n/g, ' ') +
         (limited.length > 80 ? '…' : ''));
 
     const t0 = Date.now();
@@ -157,13 +195,13 @@ function createDaemon(deps) {
       task: limited, cfg, bin: ctx.bin, cwd: ctx.root, spawnFn: deps.spawnFn
     });
     const secs = Math.round((Date.now() - t0) / 1000);
-    log('处理完，用时 ' + secs + ' 秒，' + (result.ok ? '成功' : '失败'));
+    log(t2('处理完，用时 ' + secs + ' 秒，', 'done in ' + secs + 's, ') + (result.ok ? t2('成功', 'ok') : t2('失败', 'failed')));
 
     // 8) 回信
     await mail.sendReply(ctx.transport, cfg, {
-      to: from, subject, body: buildReply(result, secs, { tag: cfg.fromName || '邮箱助手' })
+      to: from, subject, body: buildReply(result, secs, { tag: cfg.fromName || t2('邮箱助手', 'Mail Bridge') })
     });
-    log('已回信给 ' + maskEmail(from));
+    log(t2('已回信给 ', 'replied to ') + maskEmail(from));
 
     return { action: 'handled', ok: result.ok, seconds: secs, rotated: result.rotated || null };
   }
@@ -178,12 +216,12 @@ function createDaemon(deps) {
       // 先取全部未读并标记，避免处理过程中被重复拉到
       jobs = await mail.fetchUnread(client, deps.simpleParser);
     } catch (e) {
-      log('收取邮件出错：' + (e && e.message ? e.message : e));
+      log(t2('收取邮件出错：', 'failed to fetch mail: ') + (e && e.message ? e.message : e));
       try { await client.logout(); } catch (x) { /* ignore */ }
       return { fetched: 0, results: [] };
     }
 
-    if (jobs.length) log('发现 ' + jobs.length + ' 封未读');
+    if (jobs.length) log(t2('发现 ' + jobs.length + ' 封未读', jobs.length + ' unread message(s) found'));
 
     // ★ 每轮处理上限：不设的话，收件箱一旦积压就出事。
     //   实测：50 封未读会让一轮串行跑 50 次任务；而真实单次 DSH 任务要 30~60 秒，
@@ -193,8 +231,9 @@ function createDaemon(deps) {
     const perPoll = Number(cfg.maxPerPoll) > 0 ? Math.floor(Number(cfg.maxPerPoll)) : 10;
     let batch = jobs;
     if (jobs.length > perPoll) {
-      log('未读较多（' + jobs.length + ' 封），本轮只处理前 ' + perPoll +
-          ' 封，其余留到下一轮（避免积压拖垮轮询）');
+      log(t2('未读较多（' + jobs.length + ' 封），本轮只处理前 ' + perPoll + ' 封，其余留到下一轮（避免积压拖垮轮询）',
+             'backlog is large (' + jobs.length + ' unread); handling the first ' + perPoll +
+             ' this round and leaving the rest for the next one (so polling is not starved)'));
       batch = jobs.slice(0, perPoll);
     }
 
@@ -209,14 +248,14 @@ function createDaemon(deps) {
         results.push(await handleOne(job, ctx));
       } catch (e) {
         const msg = (e && e.message ? e.message : String(e));
-        log('处理邮件出错（UID ' + job.uid + '）：' + msg);
+        log(t2('处理邮件出错（UID ', 'error while handling mail (UID ') + job.uid + t2('）：', '): ') + msg);
         results.push({ action: 'error', error: msg });
         // 尽力回一封出错信，回不出去也不能让整批挂掉
         try {
           await mail.sendReply(ctx.transport, cfg, {
             to: job.fromList[0] || cfg.email,
             subject: mail.replySubject(job.subject),
-            body: '【出错了】处理这封邮件时发生异常：\n' + msg
+            body: t2('【出错了】处理这封邮件时发生异常：\n', '[error] something went wrong while handling this email:\n') + msg
           });
         } catch (x) { /* ignore */ }
       }
@@ -245,14 +284,15 @@ function createDaemon(deps) {
     //    而 setTimeout(fn, NaN) 会被当成 0 延迟 —— 变成不停连 IMAP 的空转。
     const pollSeconds = Number(cfg.pollSeconds) > 0 ? Number(cfg.pollSeconds) : 15;
 
-    log('启动，开始轮询（间隔 ' + pollSeconds + ' 秒）');
+    log(t2('启动，开始轮询（间隔 ' + pollSeconds + ' 秒）',
+           'starting to poll every ' + pollSeconds + 's'));
 
     while (running) {
       await pollOnce(ctx);
       if (!running) break;
       await sleep(Math.max(5, pollSeconds) * 1000);
     }
-    log('已退出');
+    log(t2('已退出', 'stopped'));
   }
 
   function stop() { running = false; }

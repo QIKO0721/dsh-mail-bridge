@@ -12,6 +12,10 @@
  */
 
 const { runDshOnce, permissionFingerprint, guessPermissionFiles } = require('./dsh');
+const { messages } = require('./i18n');
+
+// 回信正文和日志里的文案都走 t2(中文, 英文)，语言判定见 src/i18n.js
+const { t2 } = messages();
 
 /**
  * 造一个任务执行器。
@@ -50,9 +54,12 @@ function createTaskRunner(deps) {
         rotatedAt: new Date().toISOString(),
         rotatedFrom: old
       });
-      log('⚠ 检测到 DSH 权限配置有变化（指纹 ' + res.from + ' → ' + res.to + '）—— ' +
-          '权限预设只对新会话生效，已清空会话 ID' + (old ? '（原会话 ' + old + '）' : '') +
-          '，下一封邮件会新建会话');
+      log(t2('⚠ 检测到 DSH 权限配置有变化（指纹 ' + res.from + ' → ' + res.to + '）—— ' +
+             '权限预设只对新会话生效，已清空会话 ID' + (old ? '（原会话 ' + old + '）' : '') +
+             '，下一封邮件会新建会话',
+             '⚠ DSH permission config changed (fingerprint ' + res.from + ' -> ' + res.to + '); ' +
+             'presets only apply to new sessions, so the session id was cleared' +
+             (old ? ' (was ' + old + ')' : '') + ' - the next email starts a fresh session'));
       return { rotated: true, from: res.from, to: res.to, droppedSession: old };
     }
     return { rotated: false, fingerprint: fp, firstRun: res.firstRun };
@@ -82,7 +89,8 @@ function createTaskRunner(deps) {
 
     // ---- 会话失效 → 去掉 session-id 重开一个 ----
     if (!result.ok && cfg.sessionId && (result.unknownSession || result.sessionId)) {
-      log('会话 ' + cfg.sessionId + ' 不可用，改开新会话重试');
+      log(t2('会话 ' + cfg.sessionId + ' 不可用，改开新会话重试',
+             'session ' + cfg.sessionId + ' is unusable; retrying with a fresh session'));
       result = await runOnce(Object.assign({}, base, { sessionId: undefined }));
     }
 
@@ -95,8 +103,10 @@ function createTaskRunner(deps) {
       const oldId = cfg.sessionId;
       saveSessionId('');
       cfg.sessionId = '';
-      log('⚠ 检测到权限被拒（操作系统级拒绝），会话 ' + oldId +
-          ' 可能仍是旧权限 —— 改开新会话重跑本次任务');
+      log(t2('⚠ 检测到权限被拒（操作系统级拒绝），会话 ' + oldId +
+             ' 可能仍是旧权限 —— 改开新会话重跑本次任务',
+             '⚠ permission denied at the OS level; session ' + oldId +
+             ' may still hold the old permissions - retrying this task with a fresh session'));
 
       const retry = await runOnce(Object.assign({}, base, { sessionId: undefined }));
       rotated = {
@@ -106,15 +116,17 @@ function createTaskRunner(deps) {
         stillDenied: !!retry.permissionDenied
       };
       if (retry.ok || retry.sessionId) result = retry;
-      log('换会话重跑完成：' + (retry.ok ? '成功' : '失败') +
-          (retry.permissionDenied ? '（新会话仍被拒 —— 说明是权限配置本身的问题）' : ''));
+      log(t2('换会话重跑完成：' + (retry.ok ? '成功' : '失败') +
+             (retry.permissionDenied ? '（新会话仍被拒 —— 说明是权限配置本身的问题）' : ''),
+             'retry with a fresh session finished: ' + (retry.ok ? 'ok' : 'failed') +
+             (retry.permissionDenied ? ' (still denied - the permission config itself is the problem)' : '')));
     }
 
     // ---- 新会话 ID 持久化 ----
     if (result.sessionId && result.sessionId !== cfg.sessionId) {
       cfg.sessionId = result.sessionId;
       saveSessionId(result.sessionId);
-      log('会话 ID 已保存: ' + result.sessionId);
+      log(t2('会话 ID 已保存: ', 'session id saved: ') + result.sessionId);
     }
 
     result.rotated = rotated;
@@ -127,24 +139,31 @@ function createTaskRunner(deps) {
 /** 把回信正文拼出来，自动换过会话时加一段说明 */
 function buildReply(result, elapsedSeconds, opts) {
   const o = opts || {};
-  const tag = o.tag || '邮箱助手';
+  const tag = o.tag || t2('邮箱助手', 'Mail Bridge');
 
   if (!result.ok) {
-    return '【出错了】\n' + result.text;
+    return t2('【出错了】\n', '[error]\n') + result.text;
   }
 
   let notice = '';
   if (result.rotated) {
     notice = result.rotated.stillDenied
-      ? '【注意】检测到权限被拒，已自动换了一个新会话重试，但**新会话仍然被拒** ——\n' +
-        '这说明是权限配置本身的问题，不是会话陈旧。请检查 DSH 的权限预设。\n' +
-        '（另外：会话记忆已重置）\n\n'
-      : '【注意】检测到刚才那个会话是旧权限（DSH 的权限预设只对新会话生效），\n' +
-        '已自动换成新会话重跑本次任务。**会话记忆已重置**，\n' +
-        '之前那个会话里聊的内容不记得了，有必要的话请再说一次。\n\n';
+      ? t2('【注意】检测到权限被拒，已自动换了一个新会话重试，但**新会话仍然被拒** ——\n' +
+           '这说明是权限配置本身的问题，不是会话陈旧。请检查 DSH 的权限预设。\n' +
+           '（另外：会话记忆已重置）\n\n',
+           '[note] A permission denial was detected, so this task was retried in a new\n' +
+           'session - but the **new session was denied as well**. That means the\n' +
+           'permission config itself is the problem, not a stale session. Check the DSH\n' +
+           'permission preset. (Session memory was also reset.)\n\n')
+      : t2('【注意】检测到刚才那个会话是旧权限（DSH 的权限预设只对新会话生效），\n' +
+           '已自动换成新会话重跑本次任务。**会话记忆已重置**，\n' +
+           '之前那个会话里聊的内容不记得了，有必要的话请再说一次。\n\n',
+           '[note] The previous session still held old permissions (DSH presets only\n' +
+           'apply to new sessions), so this task was re-run in a fresh session.\n' +
+           '**Session memory was reset** - anything said in the old session is gone.\n\n');
   }
 
-  return notice + result.text + '\n\n---\n' + tag + ' · 用时 ' + elapsedSeconds + ' 秒';
+  return notice + result.text + '\n\n---\n' + tag + t2(' · 用时 ', ' · took ') + elapsedSeconds + t2(' 秒', 's');
 }
 
 module.exports = { createTaskRunner, buildReply };

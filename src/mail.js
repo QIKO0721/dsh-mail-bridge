@@ -9,6 +9,10 @@
  */
 
 const { LOOP_HEADER } = require('./security');
+const { messages } = require('./i18n');
+
+// 回信主题里的占位符也要跟语言走
+const { t2 } = messages();
 
 /** 从 mailparser 的 envelope 里取出干净的发件人地址列表 */
 function envelopeFromList(envelope) {
@@ -60,10 +64,10 @@ async function fetchUnread(client, simpleParser) {
       jobs.push({
         uid: msg.uid,
         fromList: envelopeFromList(envelope),
-        subject: envelope.subject || '(无主题)',
+        subject: envelope.subject || t2('(无主题)', '(no subject)'),
         date: envelope.date || null,
         parsed,
-        parseError: parsed ? null : '邮件解析失败'
+        parseError: parsed ? null : t2('邮件解析失败', 'failed to parse the email')
       });
     }
   } finally {
@@ -103,7 +107,7 @@ async function sendReply(transport, cfg, opts) {
   const configured = Number(cfg.maxReplyChars);
   const max = configured > 0 ? configured : 40000;
   if (text.length > max) {
-    text = text.slice(0, max) + '\n\n…（内容太长，已截断）';
+    text = text.slice(0, max) + t2('\n\n…（内容太长，已截断）', '\n\n... (truncated, too long)');
   }
 
   const mail = {
@@ -120,7 +124,7 @@ async function sendReply(transport, cfg, opts) {
 
 /** 回复时统一加 Re: 前缀，但不重复叠加 */
 function replySubject(subject) {
-  const s = String(subject || '(无主题)').trim();
+  const s = String(subject || t2('(无主题)', '(no subject)')).trim();
   return /^re\s*:/i.test(s) ? s : ('Re: ' + s);
 }
 

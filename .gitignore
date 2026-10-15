@@ -1,0 +1,46 @@
+# ============================================================
+#  dsh-mail-bridge · .gitignore
+# ============================================================
+
+# ---- 依赖 ----
+node_modules/
+
+# ---- ★ 含邮箱授权码，绝对不能提交 ----
+config.json
+config.json.bak*
+*.authcode
+.env
+.env.*
+
+# ---- 运行日志（含真实邮件摘要）----
+*.log
+
+# ---- 运行时数据目录 ----
+attachments/
+outbox/
+
+# ---- 权限/配置指纹状态 ----
+state.json
+
+# ---- 系统垃圾 ----
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+.DS_Store
+
+# ---- 编辑器 / 系统临时 ----
+*~
+*.swp
+*.tmp
+~$*
+.vscode/
+.idea/
+
+# ---- 依赖缓存 ----
+.npm/
+.cache/
+*.tsbuildinfo
+
+# ---- 测试临时产物 ----
+tests/.tmp/
